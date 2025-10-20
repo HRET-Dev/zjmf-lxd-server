@@ -207,35 +207,35 @@
         padding: 8px 6px;
         font-size: 0.75rem;
     }
-    
+
     .port-number,
     .internal-port {
         font-size: 0.7rem;
         padding: 3px 6px;
         min-width: 45px;
     }
-    
+
     .protocol-badge {
         font-size: 0.65rem;
         padding: 2px 6px;
         min-width: 35px;
     }
-    
+
     .action-btn {
         font-size: 0.7rem;
         padding: 4px 6px;
     }
-    
+
     .description-text {
         max-width: 100px;
         font-size: 0.75rem;
     }
-    
+
     .status-badge {
         font-size: 0.65rem;
         padding: 2px 6px;
     }
-    
+
     .port-display {
         flex-direction: column;
         gap: 3px;
@@ -352,7 +352,7 @@
                             </label>
                             <div class="input-group">
                                 <input name="dport" type="number" class="form-control" min="10000" max="65535"
-                                       id="dportinput" placeholder="留空自动分配 (10000-65535)">
+                                       id="dportinput" placeholder="留空自动分配">
                                 <div class="input-group-append">
                                     <button class="btn btn-outline-secondary" type="button" id="check-dport-btn">
                                         <i class="fas fa-search mr-1"></i>检测
@@ -360,7 +360,7 @@
                                 </div>
                             </div>
                             <div class="invalid-feedback" id="externalPort-feedback"></div>
-                            <small class="form-text text-muted">可自定义外网端口范围 10000-65535，不填写则由系统随机分配。</small>
+                            <small class="form-text text-muted">可自定义外网端口范围（添加时提示的端口范围），不填写则由系统随机分配。</small>
                             <div class="mt-1 small" id="externalPort-status" style="display:none;"></div>
                         </div>
 
@@ -388,12 +388,12 @@
                             <small class="form-text text-muted">TCP 适用于 HTTP/HTTPS/SSH 等服务</small>
                             {/if}
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="description">
                                 <i class="fas fa-comment mr-1"></i>备注信息 (可选)
                             </label>
-                            <input name="description" type="text" class="form-control" id="description" 
+                            <input name="description" type="text" class="form-control" id="description"
                                    placeholder="请输入该转发规则的备注信息">
                             <small class="form-text text-muted">为该NAT转发规则添加备注，方便管理和识别</small>
                         </div>
@@ -541,7 +541,7 @@ $(document).ready(function() {
     getContainerInfo(containerId);
     fetchNATList();
     setInterval(fetchNATList, 30000);
-    
+
     if (udpEnabled) {
         $('.nokvmprotocollxdserveracl').selectFilter({});
     }
@@ -717,7 +717,7 @@ function closeAddModal() {
         if (intFeedback) intFeedback.innerHTML = "";
         if (formEl) formEl.reset();
         clearExternalPortFeedback();
-        
+
         if (udpEnabled) {
             var $selectProtocol = $('.nokvmprotocollxdserveracl');
             var $options = $selectProtocol.find('select option');
@@ -821,7 +821,7 @@ $('.confirm-btnlxdserveracl').on('click', function () {
         if (internalPort) internalPort.classList.remove('is-invalid');
         if (internalPortFeedback) internalPortFeedback.innerHTML = '';
     }
-    
+
     const dportValRaw = externalPort ? externalPort.value.trim() : '';
     let dportVal = 0;
     if (dportValRaw !== '') {
@@ -1022,7 +1022,7 @@ function triggerPortCheck() {
     }
 
     const protocol = udpEnabled ? (document.querySelector("select[name='dtype']")?.value || 'tcp') : 'tcp';
-    
+
     const timestamp = new Date().getTime();
     const natCheckUrl = `/provision/custom/content?id=${currentContainerId}&key=nat_acl&action=natcheck&dport=${port}&dtype=${protocol}&hostname=${encodeURIComponent(currentContainerName)}&_t=${timestamp}&_=${timestamp - 1000}`;
 
