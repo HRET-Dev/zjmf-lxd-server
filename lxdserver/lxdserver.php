@@ -7,7 +7,8 @@ use think\Db;
 define('LXDSERVER_DEBUG', true);
 
 // 调试日志输出函数
-function lxdserver_debug($message, $data = null) {
+function lxdserver_debug($message, $data = null)
+{
     if (!LXDSERVER_DEBUG) return;
     $log = '[LXD-DEBUG] ' . $message;
     if ($data !== null) {
@@ -16,13 +17,117 @@ function lxdserver_debug($message, $data = null) {
     error_log($log);
 }
 
+// 解析外网端口范围配置，格式示例：50000-60000，返回[min, max]，非法时回退为[10000,65535]
+function lxdserver_get_port_range($params)
+{
+    $default_min = 10000;
+    $default_max = 65535;
+    $range_str = trim($params['configoptions']['external_port_range'] ?? '');
+
+    if ($range_str === '' || $range_str === null) {
+        return [$default_min, $default_max];
+    }
+
+    // 支持“min-max”或单个端口（表示固定）
+    if (preg_match('/^\s*(\d{1,5})\s*[-~—]\s*(\d{1,5})\s*$/u', $range_str, $m)) {
+        $min = intval($m[1]);
+        $max = intval($m[2]);
+    } elseif (preg_match('/^\s*(\d{1,5})\s*$/', $range_str, $m)) {
+        $min = intval($m[1]);
+        $max = intval($m[1]);
+    } else {
+        return [$default_min, $default_max];
+    }
+
+    if ($min < 1) $min = 1;
+    if ($max > 65535) $max = 65535;
+    if ($min > $max) {
+        $t = $min;
+        $min = $max;
+        $max = $t;
+    }
+    return [$min, $max];
+}
+
+// 判断外网端口是否在允许范围内
+function lxdserver_port_in_range($port, $params)
+{
+    list($min, $max) = lxdserver_get_port_range($params);
+    return ($port >= $min && $port <= $max);
+}
+
+// 调用远端API检查端口是否可用
+function lxdserver_remote_port_available($params, $hostname, $protocol, $port)
+{
+    $protocol = strtolower($protocol);
+    $query = http_build_query([
+        'hostname' => $hostname,
+        'protocol' => $protocol,
+        'port' => intval($port),
+        '_t' => time(),
+    ]);
+    $req = [
+        'url' => '/api/nat/check?' . $query,
+        'type' => 'application/x-www-form-urlencoded',
+        'data' => '',
+    ];
+    $res = lxdserver_Curl($params, $req, 'GET');
+    if (!is_array($res)) return false;
+    if (isset($res['code']) && $res['code'] == 200) {
+        if (isset($res['data']['available'])) {
+            return !!$res['data']['available'];
+        }
+        if (isset($res['available'])) {
+            return !!$res['available'];
+        }
+    }
+    return false;
+}
+
+// 在范围内随机挑选可用外网端口
+function lxdserver_pick_available_port($params, $hostname, $protocol = 'tcp', $maxAttempts = 32)
+{
+    list($min, $max) = lxdserver_get_port_range($params);
+    if ($min > $max) return 0;
+
+    $rangeSize = $max - $min + 1;
+    $attempts = min($maxAttempts, $rangeSize);
+    $candidates = [];
+
+    if ($rangeSize <= $maxAttempts) {
+        for ($p = $min; $p <= $max; $p++) $candidates[] = $p;
+        shuffle($candidates);
+    } else {
+        for ($i = 0; $i < $attempts; $i++) {
+            $candidates[] = rand($min, $max);
+        }
+        $candidates = array_values(array_unique($candidates));
+    }
+
+    foreach ($candidates as $p) {
+        if (lxdserver_remote_port_available($params, $hostname, $protocol, $p)) {
+            return $p;
+        }
+    }
+
+    // 兜底顺序扫描有限次数
+    $more = 0;
+    for ($p = $min; $p <= $max && $more < $maxAttempts; $p++, $more++) {
+        if (lxdserver_remote_port_available($params, $hostname, $protocol, $p)) {
+            return $p;
+        }
+    }
+    return 0;
+}
+
+
 // 插件元数据信息
 function lxdserver_MetaData()
 {
     return [
-        'DisplayName' => '魔方财务-LXD对接插件 by xkatld',
-        'APIVersion'  => '1.0.2',
-        'HelpDoc'     => 'https://github.com/xkatld/zjmf-lxd-server',
+        'DisplayName' => '魔方财务-LXD对接插件 by HRET',
+        'APIVersion' => '1.0.2',
+        'HelpDoc' => 'https://github.com/HRET-Dev/zjmf-lxd-server',
     ];
 }
 
@@ -31,162 +136,170 @@ function lxdserver_ConfigOptions()
 {
     return [
         'cpus' => [
-            'type'        => 'text',
-            'name'        => 'CPU核心数',
+            'type' => 'text',
+            'name' => 'CPU核心数',
             'description' => '容器的CPU核心数量',
-            'default'     => '1',
-            'key'         => 'cpus',
+            'default' => '1',
+            'key' => 'cpus',
         ],
         'memory' => [
-            'type'        => 'text',
-            'name'        => '内存',
+            'type' => 'text',
+            'name' => '内存',
             'description' => '容器的内存大小',
-            'default'     => '256MB',
-            'key'         => 'memory',
+            'default' => '256MB',
+            'key' => 'memory',
         ],
         'disk' => [
-            'type'        => 'text',
-            'name'        => '硬盘',
+            'type' => 'text',
+            'name' => '硬盘',
             'description' => '容器的硬盘大小',
-            'default'     => '512MB',
-            'key'         => 'disk',
+            'default' => '512MB',
+            'key' => 'disk',
         ],
         'image' => [
-            'type'        => 'text',
-            'name'        => '镜像',
+            'type' => 'text',
+            'name' => '镜像',
             'description' => '容器镜像名称',
-            'default'     => 'debian12',
-            'key'         => 'image',
+            'default' => 'debian12',
+            'key' => 'image',
         ],
         'traffic_limit' => [
-            'type'        => 'text',
-            'name'        => '月流量限制',
+            'type' => 'text',
+            'name' => '月流量限制',
             'description' => '每月流量限制',
-            'default'     => '100',
-            'key'         => 'traffic_limit',
+            'default' => '100',
+            'key' => 'traffic_limit',
         ],
         'ingress' => [
-            'type'        => 'text',
-            'name'        => '入站带宽',
+            'type' => 'text',
+            'name' => '入站带宽',
             'description' => '容器的入站带宽限制',
-            'default'     => '100Mbit',
-            'key'         => 'ingress',
+            'default' => '100Mbit',
+            'key' => 'ingress',
         ],
         'egress' => [
-            'type'        => 'text',
-            'name'        => '出站带宽',
+            'type' => 'text',
+            'name' => '出站带宽',
             'description' => '容器的出站带宽限制',
-            'default'     => '100Mbit',
-            'key'         => 'egress',
+            'default' => '100Mbit',
+            'key' => 'egress',
         ],
         'nat_enabled' => [
-            'type'        => 'dropdown',
-            'name'        => 'NAT端口转发功能',
+            'type' => 'dropdown',
+            'name' => 'NAT端口转发功能',
             'description' => '是否启用NAT端口转发功能',
-            'default'     => 'true',
-            'key'         => 'nat_enabled',
-            'options'     => ['false' => '禁用', 'true' => '启用'],
+            'default' => 'true',
+            'key' => 'nat_enabled',
+            'options' => ['false' => '禁用', 'true' => '启用'],
         ],
         'nat_limit' => [
-            'type'        => 'text',
-            'name'        => 'NAT规则数量',
+            'type' => 'text',
+            'name' => 'NAT规则数量',
             'description' => 'NAT端口转发规则的数量限制',
-            'default'     => '5',
-            'key'         => 'nat_limit',
+            'default' => '5',
+            'key' => 'nat_limit',
         ],
         'udp_enabled' => [
-            'type'        => 'dropdown',
-            'name'        => 'UDP协议支持',
+            'type' => 'dropdown',
+            'name' => 'UDP协议支持',
             'description' => '是否允许创建UDP端口转发规则',
-            'default'     => 'false',
-            'key'         => 'udp_enabled',
-            'options'     => ['false' => '禁用', 'true' => '启用'],
+            'default' => 'false',
+            'key' => 'udp_enabled',
+            'options' => ['false' => '禁用', 'true' => '启用'],
         ],
         'cpu_allowance' => [
-            'type'        => 'text',
-            'name'        => 'CPU使用率限制',
+            'type' => 'text',
+            'name' => 'CPU使用率限制',
             'description' => 'CPU使用率百分比',
-            'default'     => '50%',
-            'key'         => 'cpu_allowance',
+            'default' => '50%',
+            'key' => 'cpu_allowance',
         ],
 
         'memory_swap' => [
-            'type'        => 'dropdown',
-            'name'        => 'Swap开关',
+            'type' => 'dropdown',
+            'name' => 'Swap开关',
             'description' => '是否允许使用Swap',
-            'default'     => 'true',
-            'key'         => 'memory_swap',
-            'options'     => ['true' => '启用', 'false' => '禁用'],
+            'default' => 'true',
+            'key' => 'memory_swap',
+            'options' => ['true' => '启用', 'false' => '禁用'],
         ],
 
         'disk_io_limit' => [
-            'type'        => 'text',
-            'name'        => '磁盘IO限速',
+            'type' => 'text',
+            'name' => '磁盘IO限速',
             'description' => '磁盘读写速度限制',
-            'default'     => '100MB',
-            'key'         => 'disk_io_limit',
+            'default' => '100MB',
+            'key' => 'disk_io_limit',
         ],
         'max_processes' => [
-            'type'        => 'text',
-            'name'        => '最大进程数',
+            'type' => 'text',
+            'name' => '最大进程数',
             'description' => '限制容器最大进程数',
-            'default'     => '512',
-            'key'         => 'max_processes',
+            'default' => '512',
+            'key' => 'max_processes',
         ],
 
         'ipv6_enabled' => [
-            'type'        => 'dropdown',
-            'name'        => '独立IPv6功能',
+            'type' => 'dropdown',
+            'name' => '独立IPv6功能',
             'description' => '是否启用独立IPv6功能',
-            'default'     => 'false',
-            'key'         => 'ipv6_enabled',
-            'options'     => ['false' => '禁用', 'true' => '启用'],
+            'default' => 'false',
+            'key' => 'ipv6_enabled',
+            'options' => ['false' => '禁用', 'true' => '启用'],
         ],
         'ipv6_limit' => [
-            'type'        => 'text',
-            'name'        => 'IPv6绑定数量',
+            'type' => 'text',
+            'name' => 'IPv6绑定数量',
             'description' => 'IPv6独立地址数量限制',
-            'default'     => '1',
-            'key'         => 'ipv6_limit',
+            'default' => '1',
+            'key' => 'ipv6_limit',
         ],
         'proxy_enabled' => [
-            'type'        => 'dropdown',
-            'name'        => 'Nginx反向代理功能',
+            'type' => 'dropdown',
+            'name' => 'Nginx反向代理功能',
             'description' => '是否启用Nginx反向代理功能',
-            'default'     => 'false',
-            'key'         => 'proxy_enabled',
-            'options'     => ['false' => '禁用', 'true' => '启用'],
+            'default' => 'false',
+            'key' => 'proxy_enabled',
+            'options' => ['false' => '禁用', 'true' => '启用'],
         ],
         'proxy_limit' => [
-            'type'        => 'text',
-            'name'        => '反向代理域名数量',
+            'type' => 'text',
+            'name' => '反向代理域名数量',
             'description' => '允许绑定的域名数量限制',
-            'default'     => '1',
-            'key'         => 'proxy_limit',
+            'default' => '1',
+            'key' => 'proxy_limit',
         ],
         'allow_nesting' => [
-            'type'        => 'dropdown',
-            'name'        => '嵌套虚拟化',
+            'type' => 'dropdown',
+            'name' => '嵌套虚拟化',
             'description' => '是否允许容器内运行虚拟化',
-            'default'     => 'true',
-            'key'         => 'allow_nesting',
-            'options'     => ['true' => '启用', 'false' => '禁用'],
+            'default' => 'true',
+            'key' => 'allow_nesting',
+            'options' => ['true' => '启用', 'false' => '禁用'],
         ],
         'privileged' => [
-            'type'        => 'dropdown',
-            'name'        => '特权模式',
+            'type' => 'dropdown',
+            'name' => '特权模式',
             'description' => '是否允许特权容器运行',
-            'default'     => 'false',
-            'key'         => 'privileged',
-            'options'     => ['false' => '禁用', 'true' => '启用'],
+            'default' => 'false',
+            'key' => 'privileged',
+            'options' => ['false' => '禁用', 'true' => '启用'],
+        ],
+
+        'external_port_range' => [
+            'type' => 'text',
+            'name' => '外网端口范围',
+            'description' => '格式：起始-结束；留空或非法将使用默认10000-65535',
+            'default' => '10000-65535',
+            'key' => 'external_port_range',
         ],
         'enable_lxcfs' => [
-            'type'        => 'dropdown',
-            'name'        => 'LXCFS资源视图',
+            'type' => 'dropdown',
+            'name' => 'LXCFS资源视图',
             'description' => '启用后容器内将显示真实的资源限制（推荐启用，提升应用兼容性）',
-            'default'     => 'true',
-            'key'         => 'enable_lxcfs',
-            'options'     => ['true' => '启用', 'false' => '禁用'],
+            'default' => 'true',
+            'key' => 'enable_lxcfs',
+            'options' => ['true' => '启用', 'false' => '禁用'],
         ],
     ];
 }
@@ -197,7 +310,7 @@ function lxdserver_TestLink($params)
     lxdserver_debug('开始测试API连接', $params);
 
     $data = [
-        'url'  => '/api/check',
+        'url' => '/api/check',
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -208,49 +321,49 @@ function lxdserver_TestLink($params)
     if ($res === null) {
         return [
             'status' => 200,
-            'data'   => [
+            'data' => [
                 'server_status' => 0,
-                'msg'           => "连接失败: 无法连接到服务器"
+                'msg' => "连接失败: 无法连接到服务器"
             ]
         ];
     } elseif (isset($res['error'])) {
         return [
             'status' => 200,
-            'data'   => [
+            'data' => [
                 'server_status' => 0,
-                'msg'           => "连接失败: " . $res['error']
+                'msg' => "连接失败: " . $res['error']
             ]
         ];
     } elseif (isset($res['code']) && $res['code'] == 200) {
         return [
             'status' => 200,
-            'data'   => [
+            'data' => [
                 'server_status' => 1,
-                'msg'           => "连接成功"
+                'msg' => "连接成功"
             ]
         ];
     } elseif (isset($res['lxd_version'])) {
         return [
             'status' => 200,
-            'data'   => [
+            'data' => [
                 'server_status' => 1,
-                'msg'           => "连接成功"
+                'msg' => "连接成功"
             ]
         ];
     } elseif (isset($res['code'])) {
         return [
             'status' => 200,
-            'data'   => [
+            'data' => [
                 'server_status' => 0,
-                'msg'           => "连接失败: " . ($res['msg'] ?? '服务器返回错误')
+                'msg' => "连接失败: " . ($res['msg'] ?? '服务器返回错误')
             ]
         ];
     } else {
         return [
             'status' => 200,
-            'data'   => [
+            'data' => [
                 'server_status' => 0,
-                'msg'           => "连接失败: 响应格式异常"
+                'msg' => "连接失败: 响应格式异常"
             ]
         ];
     }
@@ -260,24 +373,24 @@ function lxdserver_TestLink($params)
 function lxdserver_ClientArea($params)
 {
     $pages = [
-        'info'     => ['name' => '产品信息'],
+        'info' => ['name' => '产品信息'],
     ];
-    
+
     $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'true') === 'true';
     if ($nat_enabled) {
         $pages['nat_acl'] = ['name' => 'NAT转发'];
     }
-    
+
     $ipv6_enabled = ($params['configoptions']['ipv6_enabled'] ?? 'false') === 'true';
     if ($ipv6_enabled) {
         $pages['ipv6_acl'] = ['name' => 'IPv6绑定'];
     }
-    
+
     $proxy_enabled = ($params['configoptions']['proxy_enabled'] ?? 'false') === 'true';
     if ($proxy_enabled) {
         $pages['proxy_acl'] = ['name' => '反向代理'];
     }
-    
+
     return $pages;
 }
 
@@ -309,13 +422,13 @@ function lxdserver_ClientAreaOutput($params, $key)
         }
 
         $apiEndpoints = [
-            'getinfo'    => '/api/status',
-            'getstats'   => '/api/info',
+            'getinfo' => '/api/status',
+            'getstats' => '/api/info',
             'gettraffic' => '/api/traffic',
             'getinfoall' => '/api/info',
-            'natlist'    => '/api/natlist',
-            'ipv6list'   => '/api/ipv6/list',
-            'proxylist'  => '/api/proxy/list',
+            'natlist' => '/api/natlist',
+            'ipv6list' => '/api/ipv6/list',
+            'proxylist' => '/api/proxy/list',
         ];
 
         $apiEndpoint = $apiEndpoints[$action] ?? '';
@@ -327,7 +440,7 @@ function lxdserver_ClientAreaOutput($params, $key)
         }
 
         $requestData = [
-            'url'  => $apiEndpoint . '?hostname=' . $params['domain'],
+            'url' => $apiEndpoint . '?hostname=' . $params['domain'],
             'type' => 'application/x-www-form-urlencoded',
             'data' => [],
         ];
@@ -355,15 +468,15 @@ function lxdserver_ClientAreaOutput($params, $key)
     if ($key == 'info') {
         return [
             'template' => 'templates/info.html',
-            'vars'     => [],
+            'vars' => [],
         ];
     }
 
     if ($key == 'nat_acl') {
         $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'true') === 'true';
-        
+
         $requestData = [
-            'url'  => '/api/natlist?hostname=' . $params['domain'] . '&_t=' . time(),
+            'url' => '/api/natlist?hostname=' . $params['domain'] . '&_t=' . time(),
             'type' => 'application/x-www-form-urlencoded',
             'data' => [],
         ];
@@ -375,9 +488,9 @@ function lxdserver_ClientAreaOutput($params, $key)
 
         return [
             'template' => 'templates/nat.html',
-            'vars'     => [
+            'vars' => [
                 'list' => $res['data'] ?? [],
-                'msg'  => $res['msg'] ?? '',
+                'msg' => $res['msg'] ?? '',
                 'nat_limit' => $nat_limit,
                 'current_count' => $current_count,
                 'remaining_count' => max(0, $nat_limit - $current_count),
@@ -389,9 +502,9 @@ function lxdserver_ClientAreaOutput($params, $key)
 
     if ($key == 'ipv6_acl') {
         $ipv6_enabled = ($params['configoptions']['ipv6_enabled'] ?? 'false') === 'true';
-        
+
         $requestData = [
-            'url'  => '/api/ipv6/list?hostname=' . $params['domain'] . '&_t=' . time(),
+            'url' => '/api/ipv6/list?hostname=' . $params['domain'] . '&_t=' . time(),
             'type' => 'application/x-www-form-urlencoded',
             'data' => [],
         ];
@@ -402,9 +515,9 @@ function lxdserver_ClientAreaOutput($params, $key)
 
         return [
             'template' => 'templates/ipv6.html',
-            'vars'     => [
+            'vars' => [
                 'list' => $res['data'] ?? [],
-                'msg'  => $res['msg'] ?? '',
+                'msg' => $res['msg'] ?? '',
                 'ipv6_limit' => $ipv6_limit,
                 'current_count' => $current_count,
                 'remaining_count' => max(0, $ipv6_limit - $current_count),
@@ -413,26 +526,26 @@ function lxdserver_ClientAreaOutput($params, $key)
             ],
         ];
     }
-    
+
     if ($key == 'proxy_acl') {
         $proxy_enabled = ($params['configoptions']['proxy_enabled'] ?? 'false') === 'true';
-        
+
         $requestData = [
-            'url'  => '/api/proxy/list?hostname=' . $params['domain'] . '&_t=' . time(),
+            'url' => '/api/proxy/list?hostname=' . $params['domain'] . '&_t=' . time(),
             'type' => 'application/x-www-form-urlencoded',
             'data' => [],
         ];
-        
+
         $res = lxdserver_curl($params, $requestData);
-        
+
         $proxy_limit = intval($params['configoptions']['proxy_limit'] ?? 1);
         $current_count = is_array($res['data']) ? count($res['data']) : 0;
-        
+
         return [
             'template' => 'templates/proxy.html',
-            'vars'     => [
+            'vars' => [
                 'list' => $res['data'] ?? [],
-                'msg'  => $res['msg'] ?? '',
+                'msg' => $res['msg'] ?? '',
                 'proxy_limit' => $proxy_limit,
                 'current_count' => $current_count,
                 'remaining_count' => max(0, $proxy_limit - $current_count),
@@ -452,6 +565,7 @@ function lxdserver_AllowFunction()
 }
 
 // 创建LXD容器
+
 function lxdserver_CreateAccount($params)
 {
     lxdserver_debug('开始创建容器', ['domain' => $params['domain']]);
@@ -459,54 +573,114 @@ function lxdserver_CreateAccount($params)
     $sys_pwd = $params['password'] ?? randStr(8);
 
     $data = [
-        'url'  => '/api/create',
+        'url' => '/api/create',
         'type' => 'application/json',
         'data' => [
-            'hostname'      => $params['domain'],
-            'password'      => $sys_pwd,
-            'cpus'          => (int)($params['configoptions']['cpus'] ?? 1),
-            'memory'        => $params['configoptions']['memory'] ?? '512MB',
-            'disk'          => $params['configoptions']['disk'] ?? '10GB',
-            'image'         => $params['configoptions']['image'] ?? 'ubuntu24',
-            'ingress'       => $params['configoptions']['ingress'] ?? '100Mbit',
-            'egress'        => $params['configoptions']['egress'] ?? '100Mbit',
+            'hostname' => $params['domain'],
+            'password' => $sys_pwd,
+            'cpus' => (int)($params['configoptions']['cpus'] ?? 1),
+            'memory' => $params['configoptions']['memory'] ?? '512MB',
+            'disk' => $params['configoptions']['disk'] ?? '10GB',
+            'image' => $params['configoptions']['image'] ?? 'ubuntu24',
+            'ingress' => $params['configoptions']['ingress'] ?? '100Mbit',
+            'egress' => $params['configoptions']['egress'] ?? '100Mbit',
             'allow_nesting' => ($params['configoptions']['allow_nesting'] ?? 'false') === 'true',
             'traffic_limit' => (int)($params['configoptions']['traffic_limit'] ?? 0),
-            'cpu_allowance'  => $params['configoptions']['cpu_allowance'] ?? '100%',
-            'memory_swap'           => ($params['configoptions']['memory_swap'] ?? 'true') === 'true',
-            'max_processes'  => (int)($params['configoptions']['max_processes'] ?? 512),
-            'disk_io_limit'   => $params['configoptions']['disk_io_limit'] ?? '',
-            'privileged'     => ($params['configoptions']['privileged'] ?? 'false') === 'true',
-            'enable_lxcfs'   => ($params['configoptions']['enable_lxcfs'] ?? 'true') === 'true',
+            'cpu_allowance' => $params['configoptions']['cpu_allowance'] ?? '100%',
+            'memory_swap' => ($params['configoptions']['memory_swap'] ?? 'true') === 'true',
+            'max_processes' => (int)($params['configoptions']['max_processes'] ?? 512),
+            'disk_io_limit' => $params['configoptions']['disk_io_limit'] ?? '',
+            'privileged' => ($params['configoptions']['privileged'] ?? 'false') === 'true',
+            'enable_lxcfs' => ($params['configoptions']['enable_lxcfs'] ?? 'true') === 'true',
         ],
     ];
 
-    lxdserver_debug('发送创建请求', $data);
+    // 打印请求数据
+    lxdserver_debug('创建请求数据', $data);
+
     $res = lxdserver_JSONCurl($params, $data, 'POST');
     lxdserver_debug('创建响应', $res);
 
     if (isset($res['code']) && $res['code'] == '200') {
+
         $dedicatedip_value = $params['server_ip'];
 
         $update = [
-            'dedicatedip'  => $dedicatedip_value,
+            'dedicatedip' => $dedicatedip_value,
             'domainstatus' => 'Active',
-            'username'     => 'root',
+            'username' => 'root',
         ];
 
-        if (!empty($res['data']['ssh_port'])) {
-            $ssh_port = $res['data']['ssh_port'];
-            $update['port'] = $ssh_port;
-            lxdserver_debug('获取到SSH端口', ['ssh_port' => $ssh_port]);
+        $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'true') === 'true';
+
+        if ($nat_enabled) {
+            list($min, $max) = lxdserver_get_port_range($params);
+
+            $api_ssh_port = 0;
+            if (!empty($res['data']['ssh_port'])) {
+                $api_ssh_port = intval($res['data']['ssh_port']);
+            }
+
+            $final_ssh_port = 0;
+
+            if ($api_ssh_port > 0 && lxdserver_port_in_range($api_ssh_port, $params)) {
+                // API返回的端口已在范围内，直接使用
+                $final_ssh_port = $api_ssh_port;
+                lxdserver_debug('API返回SSH端口在范围内', ['ssh_port' => $api_ssh_port, 'range' => "{$min}-{$max}"]);
+            } else {
+                // 若API未返回或返回了超出范围的端口，则自动在范围内分配一个可用端口
+                if ($api_ssh_port > 0 && !lxdserver_port_in_range($api_ssh_port, $params)) {
+                    // 尝试删除越界映射（容器内端口按约定为22）
+                    $delData = [
+                        'url' => '/api/delport',
+                        'type' => 'application/x-www-form-urlencoded',
+                        'data' => 'hostname=' . urlencode($params['domain']) . '&dtype=tcp&dport=' . intval($api_ssh_port) . '&sport=22',
+                    ];
+                    $delRes = lxdserver_Curl($params, $delData, 'POST');
+                    lxdserver_debug('删除越界SSH端口映射', ['old' => $api_ssh_port, 'res' => $delRes]);
+                }
+
+                // 自动挑选范围内的可用端口
+                $picked = lxdserver_pick_available_port($params, $params['domain'], 'tcp');
+                if ($picked <= 0) {
+                    return ['status' => 'error', 'msg' => "创建成功，但在允许的端口范围（{$min}-{$max}）内未找到可用SSH端口，请稍后重试或调整范围"];
+                }
+
+                // 添加映射：外网 $picked -> 容器 22/tcp
+                $requestData = 'hostname=' . urlencode($params['domain']) . '&dtype=tcp&sport=22&dport=' . intval($picked) . '&description=SSH';
+                $addData = [
+                    'url' => '/api/addport',
+                    'type' => 'application/x-www-form-urlencoded',
+                    'data' => $requestData,
+                ];
+                $addRes = lxdserver_Curl($params, $addData, 'POST');
+                lxdserver_debug('为SSH分配范围内端口', ['picked' => $picked, 'res' => $addRes]);
+
+                if (isset($addRes['code']) && intval($addRes['code']) === 200) {
+                    $final_ssh_port = $picked;
+                } else {
+                    return ['status' => 'error', 'msg' => ($addRes['msg'] ?? 'SSH端口映射添加失败')];
+                }
+            }
+
+            if ($final_ssh_port > 0) {
+                $update['port'] = $final_ssh_port;
+            }
         } else {
-            lxdserver_debug('警告：响应中没有SSH端口信息', $res);
+            // NAT未启用时，仅同步API返回的端口（如有）
+            if (!empty($res['data']['ssh_port'])) {
+                $update['port'] = intval($res['data']['ssh_port']);
+                lxdserver_debug('获取到SSH端口（未强制范围）', ['ssh_port' => $update['port']]);
+            } else {
+                lxdserver_debug('警告：响应中没有SSH端口信息', $res);
+            }
         }
 
         try {
             Db::name('host')->where('id', $params['hostid'])->update($update);
             lxdserver_debug('数据库更新成功', $update);
         } catch (\Exception $e) {
-             return ['status' => 'error', 'msg' => ($res['msg'] ?? '创建成功，但同步数据到面板失败: ' . $e->getMessage())];
+            return ['status' => 'error', 'msg' => ($res['msg'] ?? '创建成功，但同步数据到面板失败: ' . $e->getMessage())];
         }
 
         return ['status' => 'success', 'msg' => $res['msg'] ?? '创建成功'];
@@ -515,11 +689,12 @@ function lxdserver_CreateAccount($params)
     }
 }
 
+
 // 同步容器信息
 function lxdserver_Sync($params)
 {
     $data = [
-        'url'  => '/api/status?hostname=' . $params['domain'],
+        'url' => '/api/status?hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -529,7 +704,7 @@ function lxdserver_Sync($params)
         if (class_exists('think\Db') && isset($params['hostid'])) {
             try {
                 $dedicatedip_value = $params['server_ip'];
-                
+
                 $update_data = [
                     'dedicatedip' => $dedicatedip_value,
                 ];
@@ -553,7 +728,7 @@ function lxdserver_Sync($params)
 function lxdserver_TerminateAccount($params)
 {
     $data = [
-        'url'  => '/api/delete?hostname=' . $params['domain'],
+        'url' => '/api/delete?hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -568,7 +743,7 @@ function lxdserver_TerminateAccount($params)
 function lxdserver_On($params)
 {
     $data = [
-        'url'  => '/api/boot?hostname=' . $params['domain'],
+        'url' => '/api/boot?hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -583,7 +758,7 @@ function lxdserver_On($params)
 function lxdserver_Off($params)
 {
     $data = [
-        'url'  => '/api/stop?' . 'hostname=' . $params['domain'],
+        'url' => '/api/stop?' . 'hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -602,12 +777,11 @@ function lxdserver_SuspendAccount($params)
     lxdserver_debug('开始暂停容器', ['domain' => $params['domain']]);
 
     $data = [
-        'url'  => '/api/suspend?hostname=' . $params['domain'],
+        'url' => '/api/suspend?hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
     $res = lxdserver_Curl($params, $data, 'GET');
-
 
 
     if (isset($res['code']) && $res['code'] == '200') {
@@ -623,12 +797,11 @@ function lxdserver_UnsuspendAccount($params)
     lxdserver_debug('开始解除暂停容器', ['domain' => $params['domain']]);
 
     $data = [
-        'url'  => '/api/unsuspend?hostname=' . $params['domain'],
+        'url' => '/api/unsuspend?hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
     $res = lxdserver_Curl($params, $data, 'GET');
-
 
 
     if (isset($res['code']) && $res['code'] == '200') {
@@ -642,7 +815,7 @@ function lxdserver_UnsuspendAccount($params)
 function lxdserver_Reboot($params)
 {
     $data = [
-        'url'  => '/api/reboot?' . 'hostname=' . $params['domain'],
+        'url' => '/api/reboot?' . 'hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -659,7 +832,7 @@ function lxdserver_Reboot($params)
 function lxdserver_getNATRuleCount($params)
 {
     $data = [
-        'url'  => '/api/natlist?hostname=' . urlencode($params['domain']),
+        'url' => '/api/natlist?hostname=' . urlencode($params['domain']),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -674,25 +847,25 @@ function lxdserver_getNATRuleCount($params)
 }
 
 // 添加NAT端口转发
+
 function lxdserver_natadd($params)
 {
     $nat_enabled = ($params['configoptions']['nat_enabled'] ?? 'true') === 'true';
     if (!$nat_enabled) {
         return ['status' => 'error', 'msg' => 'NAT端口转发功能已禁用，请联系管理员启用此功能。'];
     }
-    
+
     parse_str(file_get_contents("php://input"), $post);
 
-    $dport = intval($post['dport'] ?? 0);
-    $sport = intval($post['sport'] ?? 0);
-    $dtype = strtolower(trim($post['dtype'] ?? ''));
+    $dport = intval($post['dport'] ?? 0);   // 外网端口（可为空，表示自动分配）
+    $sport = intval($post['sport'] ?? 0);   // 容器内部端口
+    $dtype = strtolower(trim($post['dtype'] ?? 'tcp'));
     $description = trim($post['description'] ?? '');
     $udp_enabled = ($params['configoptions']['udp_enabled'] ?? 'false') === 'true';
 
     if (!in_array($dtype, ['tcp', 'udp'])) {
         return ['status' => 'error', 'msg' => '不支持的协议类型，仅支持TCP和UDP'];
     }
-    
     if ($dtype === 'udp' && !$udp_enabled) {
         return ['status' => 'error', 'msg' => 'UDP协议未启用，请联系管理员开启UDP支持'];
     }
@@ -700,38 +873,62 @@ function lxdserver_natadd($params)
         return ['status' => 'error', 'msg' => '容器内部端口超过范围'];
     }
 
-    $nat_limit = intval($params['configoptions']['nat_limit'] ?? 5);
-
-    $current_count = lxdserver_getNATRuleCount($params);
-    if ($current_count >= $nat_limit) {
-        return ['status' => 'error', 'msg' => "NAT规则数量已达到限制（{$nat_limit}条），无法添加更多规则"];
+    // NAT规则数量限制
+    $nat_limit = intval($params['configoptions']['nat_limit'] ?? 0);
+    if ($nat_limit > 0) {
+        $current = lxdserver_getNATRuleCount($params);
+        if ($current >= $nat_limit) {
+            return ['status' => 'error', 'msg' => "NAT规则数量已达到限制（{$nat_limit}条），无法添加更多规则"];
+        }
     }
 
-    $requestData = 'hostname=' . urlencode($params['domain']) . '&dtype=' . urlencode($dtype) . '&sport=' . $sport;
+    list($min, $max) = lxdserver_get_port_range($params);
 
-    if ($dport > 0) {
-        if ($dport < 10000 || $dport > 65535) {
-            return ['status' => 'error', 'msg' => '外网端口范围为10000-65535'];
+    // 若未指定外网端口，则在范围内自动选择一个可用端口
+    if ($dport <= 0) {
+        $picked = lxdserver_pick_available_port($params, $params['domain'], $dtype);
+        if ($picked <= 0) {
+            return ['status' => 'error', 'msg' => "在允许的端口范围（{$min}-{$max}）内未找到可用端口，请稍后重试或调整范围"];
         }
-        $checkData = [
-            'url'  => '/api/nat/check?hostname=' . urlencode($params['domain']) . '&protocol=' . urlencode($dtype) . '&port=' . $dport,
-            'type' => 'application/x-www-form-urlencoded',
-            'data' => [],
-        ];
-        $checkRes = lxdserver_Curl($params, $checkData, 'GET');
-        if (!isset($checkRes['code']) || $checkRes['code'] != 200 || empty($checkRes['data']['available'])) {
-            $reason = $checkRes['data']['reason'] ?? $checkRes['msg'] ?? '端口不可用';
+        $dport = $picked;
+    } else {
+        // 指定了端口，则检查是否在范围内
+        if (!lxdserver_port_in_range($dport, $params)) {
+            return ['status' => 'error', 'msg' => "外网端口不在允许范围（{$min}-{$max}）内"];
+        }
+        // 同时检查该端口是否可用
+        $ok = lxdserver_remote_port_available($params, $params['domain'], $dtype, $dport);
+        if (!$ok) {
+            // 查询具体原因
+            $query = http_build_query([
+                'hostname' => $params['domain'],
+                'protocol' => $dtype,
+                'port' => $dport,
+                '_t' => time(),
+            ]);
+            $check = [
+                'url' => '/api/nat/check?' . $query,
+                'type' => 'application/x-www-form-urlencoded',
+                'data' => '',
+            ];
+            $resCheck = lxdserver_Curl($params, $check, 'GET');
+            $reason = $resCheck['data']['reason'] ?? ($resCheck['msg'] ?? '端口不可用');
             return ['status' => 'error', 'msg' => $reason];
         }
-        $requestData .= '&dport=' . $dport;
     }
-    
-    if (!empty($description)) {
+
+    // 组装请求
+    $requestData = 'hostname=' . urlencode($params['domain'])
+        . '&dtype=' . urlencode($dtype)
+        . '&sport=' . $sport
+        . '&dport=' . $dport;
+
+    if ($description !== '') {
         $requestData .= '&description=' . urlencode($description);
     }
 
     $data = [
-        'url'  => '/api/addport',
+        'url' => '/api/addport',
         'type' => 'application/x-www-form-urlencoded',
         'data' => $requestData,
     ];
@@ -745,32 +942,33 @@ function lxdserver_natadd($params)
     }
 }
 
+
 // 删除NAT端口转发
+
 function lxdserver_natdel($params)
 {
-    
     parse_str(file_get_contents("php://input"), $post);
 
     $dport = intval($post['dport'] ?? 0);
     $sport = intval($post['sport'] ?? 0);
-    $dtype = strtolower(trim($post['dtype'] ?? ''));
+    $dtype = strtolower(trim($post['dtype'] ?? 'tcp'));
     $udp_enabled = ($params['configoptions']['udp_enabled'] ?? 'false') === 'true';
 
     if (!in_array($dtype, ['tcp', 'udp'])) {
         return ['status' => 'error', 'msg' => '不支持的协议类型，仅支持TCP和UDP'];
     }
-    
     if ($dtype === 'udp' && !$udp_enabled) {
+        return ['status' => 'error', 'msg' => 'UDP协议未启用，请联系管理员开启UDP支持'];
     }
     if ($sport <= 0 || $sport > 65535) {
         return ['status' => 'error', 'msg' => '容器内部端口超过范围'];
     }
-    if ($dport < 10000 || $dport > 65535) {
-        return ['status' => 'error', 'msg' => '外网端口映射范围为10000-65535'];
+    if ($dport <= 0 || $dport > 65535) {
+        return ['status' => 'error', 'msg' => '外网端口无效'];
     }
 
     $data = [
-        'url'  => '/api/delport',
+        'url' => '/api/delport',
         'type' => 'application/x-www-form-urlencoded',
         'data' => 'hostname=' . urlencode($params['domain']) . '&dtype=' . urlencode($dtype) . '&dport=' . $dport . '&sport=' . $sport,
     ];
@@ -784,11 +982,12 @@ function lxdserver_natdel($params)
     }
 }
 
+
 // 查询容器运行状态
 function lxdserver_Status($params)
 {
     $data = [
-        'url'  => '/api/status?' . 'hostname=' . $params['domain'],
+        'url' => '/api/status?' . 'hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -828,7 +1027,7 @@ function lxdserver_Status($params)
 function lxdserver_CrackPassword($params, $new_pass)
 {
     $data = [
-        'url'  => '/api/password',
+        'url' => '/api/password',
         'type' => 'application/json',
         'data' => [
             'hostname' => $params['domain'],
@@ -859,26 +1058,26 @@ function lxdserver_Reinstall($params)
     $reinstall_pass = $params['password'] ?? randStr(8);
 
     $data = [
-        'url'  => '/api/reinstall',
+        'url' => '/api/reinstall',
         'type' => 'application/json',
         'data' => [
             'hostname' => $params['domain'],
-            'system'   => $params['reinstall_os'],
+            'system' => $params['reinstall_os'],
             'password' => $reinstall_pass,
 
-            'cpus'          => (int)($params['configoptions']['cpus'] ?? 1),
-            'memory'        => $params['configoptions']['memory'] ?? '512MB',
-            'disk'          => $params['configoptions']['disk'] ?? '10GB',
-            'ingress'       => $params['configoptions']['ingress'] ?? '100Mbit',
-            'egress'        => $params['configoptions']['egress'] ?? '100Mbit',
+            'cpus' => (int)($params['configoptions']['cpus'] ?? 1),
+            'memory' => $params['configoptions']['memory'] ?? '512MB',
+            'disk' => $params['configoptions']['disk'] ?? '10GB',
+            'ingress' => $params['configoptions']['ingress'] ?? '100Mbit',
+            'egress' => $params['configoptions']['egress'] ?? '100Mbit',
             'allow_nesting' => ($params['configoptions']['allow_nesting'] ?? 'false') === 'true',
             'traffic_limit' => (int)($params['configoptions']['traffic_limit'] ?? 0),
-            'cpu_allowance'  => $params['configoptions']['cpu_allowance'] ?? '100%',
-            'memory_swap'           => ($params['configoptions']['memory_swap'] ?? 'true') === 'true',
-            'max_processes'  => (int)($params['configoptions']['max_processes'] ?? 512),
-            'disk_io_limit'   => $params['configoptions']['disk_io_limit'] ?? '',
-            'privileged'     => ($params['configoptions']['privileged'] ?? 'false') === 'true',
-            'enable_lxcfs'   => ($params['configoptions']['enable_lxcfs'] ?? 'true') === 'true',
+            'cpu_allowance' => $params['configoptions']['cpu_allowance'] ?? '100%',
+            'memory_swap' => ($params['configoptions']['memory_swap'] ?? 'true') === 'true',
+            'max_processes' => (int)($params['configoptions']['max_processes'] ?? 512),
+            'disk_io_limit' => $params['configoptions']['disk_io_limit'] ?? '',
+            'privileged' => ($params['configoptions']['privileged'] ?? 'false') === 'true',
+            'enable_lxcfs' => ($params['configoptions']['enable_lxcfs'] ?? 'true') === 'true',
         ],
     ];
     $res = lxdserver_JSONCurl($params, $data, 'POST');
@@ -899,17 +1098,17 @@ function lxdserver_JSONCurl($params, $data = [], $request = 'POST')
     $url = $protocol . '://' . $params['server_ip'] . ':' . $params['port'] . $data['url'];
 
     $curlOptions = [
-        CURLOPT_URL            => $url,
+        CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING       => '',
-        CURLOPT_MAXREDIRS      => 10,
-        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 30,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST  => $request,
-        CURLOPT_POSTFIELDS     => json_encode($data['data']),
-        CURLOPT_HTTPHEADER     => [
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => $request,
+        CURLOPT_POSTFIELDS => json_encode($data['data']),
+        CURLOPT_HTTPHEADER => [
             'apikey: ' . $params['accesshash'],
             'Content-Type: application/json',
         ],
@@ -922,7 +1121,7 @@ function lxdserver_JSONCurl($params, $data = [], $request = 'POST')
     curl_setopt_array($curl, $curlOptions);
 
     $response = curl_exec($curl);
-    $errno    = curl_errno($curl);
+    $errno = curl_errno($curl);
 
     curl_close($curl);
 
@@ -950,20 +1149,20 @@ function lxdserver_Curl($params, $data = [], $request = 'POST')
     if ($request === 'GET' && !empty($data['data']) && is_array($data['data'])) {
         $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($data['data']);
     } elseif ($request === 'GET' && !empty($data['data']) && is_string($data['data'])) {
-         $url .= (strpos($url, '?') === false ? '?' : '&') . $data['data'];
+        $url .= (strpos($url, '?') === false ? '?' : '&') . $data['data'];
     }
 
     $curlOptions = [
-        CURLOPT_URL            => $url,
+        CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING       => '',
-        CURLOPT_MAXREDIRS      => 10,
-        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 30,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST  => $request,
-        CURLOPT_HTTPHEADER     => [
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => $request,
+        CURLOPT_HTTPHEADER => [
             'apikey: ' . $params['accesshash'],
             'Content-Type: ' . ($data['type'] ?? 'application/x-www-form-urlencoded'),
         ],
@@ -980,7 +1179,7 @@ function lxdserver_Curl($params, $data = [], $request = 'POST')
     }
 
     $response = curl_exec($curl);
-    $errno    = curl_errno($curl);
+    $errno = curl_errno($curl);
     $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
     $curlError = curl_error($curl);
 
@@ -1018,7 +1217,7 @@ function lxdserver_TransformAPIResponse($action, $response)
     }
 
     if (!isset($response['code']) || $response['code'] != 200) {
-        return $response; 
+        return $response;
     }
 
     switch ($action) {
@@ -1087,9 +1286,9 @@ function lxdserver_TransformAPIResponse($action, $response)
 // 获取NAT规则列表
 function lxdserver_natlist($params)
 {
-    
+
     $requestData = [
-        'url'  => '/api/natlist?' . 'hostname=' . $params['domain'] . '&_t=' . time(),
+        'url' => '/api/natlist?' . 'hostname=' . $params['domain'] . '&_t=' . time(),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -1100,84 +1299,43 @@ function lxdserver_natlist($params)
     return $res;
 }
 
+
 function lxdserver_natcheck($params)
 {
-    // 先尝试从URL查询参数获取
-    $dport = intval($_GET['dport'] ?? 0);
-    $dtype = strtolower(trim($_GET['dtype'] ?? ''));
-    $hostname = trim($_GET['hostname'] ?? '');
+    // 允许从 GET 或 POST 获取参数
+    $dport = intval($_GET['dport'] ?? ($_POST['dport'] ?? 0));
+    $dtype = strtolower(trim($_GET['dtype'] ?? ($_POST['dtype'] ?? 'tcp')));
+    $hostname = trim($_GET['hostname'] ?? ($_POST['hostname'] ?? ''));
 
-    // 如果GET参数为空，尝试从POST获取
-    if ($dport <= 0) {
-        $dport = intval($_POST['dport'] ?? 0);
-    }
-    if (empty($dtype)) {
-        $dtype = strtolower(trim($_POST['dtype'] ?? 'tcp'));
-    }
-    if (empty($hostname)) {
-        $hostname = trim($_POST['hostname'] ?? '');
-    }
-
-    // 如果还是为空，尝试从原始POST数据解析
-    if ($dport <= 0 || empty($hostname)) {
-        $postRaw = file_get_contents("php://input");
-        if (!empty($postRaw)) {
-            parse_str($postRaw, $input);
-            if ($dport <= 0) {
-                $dport = intval($input['dport'] ?? 0);
-            }
-            if (empty($dtype)) {
-                $dtype = strtolower(trim($input['dtype'] ?? 'tcp'));
-            }
-            if (empty($hostname)) {
-                $hostname = trim($input['hostname'] ?? '');
-            }
-        }
-    }
-
-    // 如果hostname还是空，使用params中的domain
-    if (empty($hostname)) {
-        $hostname = trim($params['domain'] ?? '');
-    }
-
-    lxdserver_debug('natcheck参数解析', [
-        'dport' => $dport, 
-        'dtype' => $dtype, 
-        'hostname' => $hostname,
-        'GET' => $_GET,
-        'POST' => $_POST,
-        'raw_input' => file_get_contents("php://input"),
-        'params_domain' => $params['domain'] ?? 'null'
-    ]);
-
-    // 参数验证
     if ($dport <= 0) {
         return ['code' => 400, 'msg' => '缺少端口参数', 'data' => ['available' => false, 'reason' => '缺少端口参数']];
     }
     if (!in_array($dtype, ['tcp', 'udp'])) {
         return ['code' => 400, 'msg' => '协议类型错误', 'data' => ['available' => false, 'reason' => '协议类型错误']];
     }
-    if ($dport < 10000 || $dport > 65535) {
-        return ['code' => 400, 'msg' => '端口范围为10000-65535', 'data' => ['available' => false, 'reason' => '端口范围为10000-65535']];
-    }
     if (empty($hostname)) {
         return ['code' => 400, 'msg' => '容器标识缺失', 'data' => ['available' => false, 'reason' => '容器标识缺失']];
     }
 
-    // 使用GET请求调用后端API
+    list($min, $max) = lxdserver_get_port_range($params);
+    if ($dport < $min || $dport > $max) {
+        return ['code' => 400, 'msg' => "外网端口范围为{$min}-{$max}", 'data' => ['available' => false, 'reason' => "外网端口范围为{$min}-{$max}"]];
+    }
+
     $queryParams = http_build_query([
         'hostname' => $hostname,
         'protocol' => $dtype,
-        'port'     => $dport,
+        'port' => $dport,
+        '_t' => time(),
     ]);
 
-    $requestData = [
-        'url'  => '/api/nat/check?' . $queryParams,
+    $data = [
+        'url' => '/api/nat/check?' . $queryParams,
         'type' => 'application/x-www-form-urlencoded',
         'data' => '',
     ];
 
-    $res = lxdserver_Curl($params, $requestData, 'GET');
+    $res = lxdserver_Curl($params, $data, 'GET');
 
     if ($res === null) {
         return ['code' => 500, 'msg' => '连接服务器失败', 'data' => ['available' => false, 'reason' => '连接服务器失败']];
@@ -1190,12 +1348,14 @@ function lxdserver_natcheck($params)
     return $res;
 }
 
+
 // 获取Web控制台URL
-function lxdserver_vnc($params) {
+function lxdserver_vnc($params)
+{
     lxdserver_debug('VNC控制台请求', ['domain' => $params['domain']]);
 
     $data = [
-        'url'  => '/api/status?hostname=' . $params['domain'],
+        'url' => '/api/status?hostname=' . $params['domain'],
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -1210,7 +1370,7 @@ function lxdserver_vnc($params) {
     }
 
     $tokenData = [
-        'url'  => '/api/console/create-token',
+        'url' => '/api/console/create-token',
         'type' => 'application/json',
         'data' => [
             'hostname' => $params['domain'],
@@ -1230,7 +1390,6 @@ function lxdserver_vnc($params) {
 
     $protocol = 'https';
     $consoleUrl = $protocol . '://' . $params['server_ip'] . ':' . $params['port'] . '/console?token=' . $tokenRes['data']['token'];
-
 
 
     return [
@@ -1261,7 +1420,7 @@ function lxdserver_TrafficReset($params)
     }
 
     $data = [
-        'url'  => '/api/traffic/reset?hostname=' . urlencode($params['domain']),
+        'url' => '/api/traffic/reset?hostname=' . urlencode($params['domain']),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -1280,7 +1439,7 @@ function lxdserver_TrafficReset($params)
 function lxdserver_getIPv6BindingCount($params)
 {
     $data = [
-        'url'  => '/api/ipv6/list?hostname=' . urlencode($params['domain']),
+        'url' => '/api/ipv6/list?hostname=' . urlencode($params['domain']),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -1301,14 +1460,14 @@ function lxdserver_ipv6add($params)
     if (!$ipv6_enabled) {
         return ['status' => 'error', 'msg' => 'IPv6独立绑定功能未启用，请联系管理员启用此功能。'];
     }
-    
+
     parse_str(file_get_contents("php://input"), $post);
 
     $description = trim($post['description'] ?? '');
 
     $ipv6_limit = intval($params['configoptions']['ipv6_limit'] ?? 1);
     $current_count = lxdserver_getIPv6BindingCount($params);
-    
+
     if ($current_count >= $ipv6_limit) {
         return ['status' => 'error', 'msg' => "IPv6绑定数量已达到限制（{$ipv6_limit}个），无法添加更多绑定"];
     }
@@ -1316,7 +1475,7 @@ function lxdserver_ipv6add($params)
     $requestData = 'hostname=' . urlencode($params['domain']) . '&description=' . urlencode($description);
 
     $data = [
-        'url'  => '/api/ipv6/add',
+        'url' => '/api/ipv6/add',
         'type' => 'application/x-www-form-urlencoded',
         'data' => $requestData,
     ];
@@ -1333,7 +1492,7 @@ function lxdserver_ipv6add($params)
 // 删除IPv6独立绑定
 function lxdserver_ipv6del($params)
 {
-    
+
     parse_str(file_get_contents("php://input"), $post);
 
     $public_ipv6 = trim($post['public_ipv6'] ?? '');
@@ -1345,7 +1504,7 @@ function lxdserver_ipv6del($params)
     $requestData = 'hostname=' . urlencode($params['domain']) . '&public_ipv6=' . urlencode($public_ipv6);
 
     $data = [
-        'url'  => '/api/ipv6/delete',
+        'url' => '/api/ipv6/delete',
         'type' => 'application/x-www-form-urlencoded',
         'data' => $requestData,
     ];
@@ -1362,10 +1521,10 @@ function lxdserver_ipv6del($params)
 // 获取IPv6绑定列表
 function lxdserver_ipv6list($params)
 {
-    
+
     $data = [
-        'url'  => '/api/ipv6/list?hostname=' . urlencode($params['domain']),
-        'type' => 'application/x-www-form-urlencoded', 
+        'url' => '/api/ipv6/list?hostname=' . urlencode($params['domain']),
+        'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
 
@@ -1385,7 +1544,7 @@ function lxdserver_proxyadd($params)
     if (!$proxy_enabled) {
         return ['status' => 'error', 'msg' => 'Nginx反向代理功能已禁用，请联系管理员启用此功能。'];
     }
-    
+
     parse_str(file_get_contents("php://input"), $post);
 
     $domain = trim($post['domain'] ?? '');
@@ -1404,18 +1563,18 @@ function lxdserver_proxyadd($params)
     // 检查数量限制
     $proxy_limit = intval($params['configoptions']['proxy_limit'] ?? 1);
     $current_count = lxdserver_getProxyCount($params);
-    
+
     if ($current_count >= $proxy_limit) {
         return ['status' => 'error', 'msg' => "已达到反向代理数量上限（{$proxy_limit}个），无法继续添加"];
     }
 
-    $requestData = 'hostname=' . urlencode($params['domain']) . 
-                   '&domain=' . urlencode($domain) . 
-                   '&container_port=' . $container_port .
-                   '&description=' . urlencode($description);
+    $requestData = 'hostname=' . urlencode($params['domain']) .
+        '&domain=' . urlencode($domain) .
+        '&container_port=' . $container_port .
+        '&description=' . urlencode($description);
 
     $data = [
-        'url'  => '/api/proxy/add',
+        'url' => '/api/proxy/add',
         'type' => 'application/x-www-form-urlencoded',
         'data' => $requestData,
     ];
@@ -1443,7 +1602,7 @@ function lxdserver_proxydel($params)
     $requestData = 'hostname=' . urlencode($params['domain']) . '&domain=' . urlencode($domain);
 
     $data = [
-        'url'  => '/api/proxy/delete',
+        'url' => '/api/proxy/delete',
         'type' => 'application/x-www-form-urlencoded',
         'data' => $requestData,
     ];
@@ -1461,7 +1620,7 @@ function lxdserver_proxydel($params)
 function lxdserver_proxylist($params)
 {
     $data = [
-        'url'  => '/api/proxy/list?hostname=' . urlencode($params['domain']),
+        'url' => '/api/proxy/list?hostname=' . urlencode($params['domain']),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
@@ -1479,21 +1638,21 @@ function lxdserver_proxylist($params)
 function lxdserver_proxycheck($params)
 {
     parse_str(file_get_contents("php://input"), $post);
-    
+
     $domain = trim($post['domain'] ?? '');
-    
+
     if (empty($domain)) {
         return ['status' => 'error', 'msg' => '请输入域名'];
     }
-    
+
     $data = [
-        'url'  => '/api/proxy/check?domain=' . urlencode($domain),
+        'url' => '/api/proxy/check?domain=' . urlencode($domain),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
-    
+
     $res = lxdserver_Curl($params, $data, 'GET');
-    
+
     if (isset($res['code']) && $res['code'] == 200) {
         return ['status' => 'success', 'data' => $res['data'] ?? [], 'msg' => $res['msg'] ?? ''];
     } else {
@@ -1505,7 +1664,7 @@ function lxdserver_proxycheck($params)
 function lxdserver_getProxyCount($params)
 {
     $data = [
-        'url'  => '/api/proxy/list?hostname=' . urlencode($params['domain']),
+        'url' => '/api/proxy/list?hostname=' . urlencode($params['domain']),
         'type' => 'application/x-www-form-urlencoded',
         'data' => [],
     ];
