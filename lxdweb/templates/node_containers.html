@@ -47,6 +47,12 @@
                         </svg>
                     </button>
                 </div>
+                <button id="btnSelectAll" onclick="toggleSelectAllBtn()" class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span id="selectAllText">全选</span>
+                </button>
                 <button onclick="syncContainers()" class="px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition flex items-center gap-1.5">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -102,6 +108,25 @@
             <div class="text-xs text-gray-600">
                 共 <span id="totalCount" class="font-bold text-gray-800">0</span> 个容器
                 <span id="pageInfo" class="ml-2"></span>
+            </div>
+        </div>
+
+        <!-- 批量操作工具栏 -->
+        <div id="batchOperationBar" class="bg-blue-50 rounded-lg border border-blue-200 p-3 mb-4" style="display: none;">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-blue-900">已选择 <span id="selectedCount">0</span> 个容器</span>
+                    <button onclick="clearSelection()" class="text-xs text-blue-600 hover:text-blue-800 underline">清除选择</button>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="batchStart()" class="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded transition">启动</button>
+                    <button onclick="batchStop()" class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded transition">停止</button>
+                    <button onclick="batchRestart()" class="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition">重启</button>
+                    <button onclick="batchSuspend()" class="px-3 py-1.5 text-xs font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded transition">暂停</button>
+                    <button onclick="batchUnsuspend()" class="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded transition">恢复</button>
+                    <button onclick="batchResetTraffic()" class="px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition">重置流量</button>
+                    <button onclick="batchDelete()" class="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition">删除</button>
+                </div>
             </div>
         </div>
 
@@ -492,7 +517,10 @@
                     <div class="bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200">
                         <div class="p-4">
                             <div class="flex justify-between items-start mb-3">
-                                <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-1 min-w-0">
+                                    <label class="cursor-pointer">
+                                        <input type="checkbox" class="checkbox checkbox-xs container-checkbox" data-hostname="${c.hostname}" onchange="updateSelection()" />
+                                    </label>
                                     <h3 class="font-semibold text-gray-800 text-base truncate">${c.hostname}</h3>
                                 </div>
                                 ${statusBadge}
@@ -534,6 +562,11 @@
                         <table class="table table-xs">
                             <thead>
                                 <tr class="bg-gray-50">
+                                    <th class="w-10">
+                                        <label>
+                                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="checkbox checkbox-xs" />
+                                        </label>
+                                    </th>
                                     <th class="text-xs text-gray-600">主机名</th>
                                     <th class="text-xs text-gray-600">状态</th>
                                     <th class="text-xs text-gray-600">CPU</th>
@@ -578,6 +611,11 @@
                 
                 html += `
                     <tr class="hover">
+                        <td>
+                            <label>
+                                <input type="checkbox" class="checkbox checkbox-xs container-checkbox" data-hostname="${c.hostname}" onchange="updateSelection()" />
+                            </label>
+                        </td>
                         <td><span class="font-semibold text-gray-800 text-xs">${c.hostname}</span></td>
                         <td>${statusBadge}</td>
                         <td class="text-xs text-gray-700">${(c.cpu_usage || 0).toFixed(1)}% / ${c.cpus || 1}核</td>
@@ -870,6 +908,7 @@
             const colors = {
                 'success': 'bg-green-600',
                 'error': 'bg-red-600',
+                'warning': 'bg-orange-600',
                 'info': 'bg-blue-600'
             };
             
@@ -884,6 +923,179 @@
             setTimeout(() => {
                 toast.fadeOut(300, function() { $(this).remove(); });
             }, 3000);
+        }
+
+        // 批量操作相关函数
+        function toggleSelectAll() {
+            const selectAll = $('#selectAll').is(':checked');
+            $('.container-checkbox').prop('checked', selectAll);
+            updateSelection();
+        }
+
+        function toggleSelectAllBtn() {
+            const totalCheckboxes = $('.container-checkbox').length;
+            const selectedCheckboxes = $('.container-checkbox:checked').length;
+            
+            if (selectedCheckboxes === totalCheckboxes && totalCheckboxes > 0) {
+                // 当前是全选状态，点击后取消全选
+                $('.container-checkbox').prop('checked', false);
+                $('#selectAll').prop('checked', false);
+            } else {
+                // 当前不是全选状态，点击后全选
+                $('.container-checkbox').prop('checked', true);
+                $('#selectAll').prop('checked', true);
+            }
+            updateSelection();
+        }
+
+        function updateSelection() {
+            const selectedCheckboxes = $('.container-checkbox:checked');
+            const count = selectedCheckboxes.length;
+            
+            $('#selectedCount').text(count);
+            
+            if (count > 0) {
+                $('#batchOperationBar').slideDown(200);
+            } else {
+                $('#batchOperationBar').slideUp(200);
+            }
+            
+            // 更新全选框状态（表格头部的复选框）
+            const totalCheckboxes = $('.container-checkbox').length;
+            $('#selectAll').prop('checked', count === totalCheckboxes && count > 0);
+            
+            // 更新全选按钮文本
+            if (count === totalCheckboxes && count > 0) {
+                $('#selectAllText').text('取消全选');
+            } else {
+                $('#selectAllText').text('全选');
+            }
+        }
+
+        function clearSelection() {
+            $('.container-checkbox').prop('checked', false);
+            $('#selectAll').prop('checked', false);
+            updateSelection();
+        }
+
+        function getSelectedContainers() {
+            const selected = [];
+            $('.container-checkbox:checked').each(function() {
+                selected.push($(this).data('hostname'));
+            });
+            return selected;
+        }
+
+        function batchStart() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            if (!confirm(`确定要启动选中的 ${containers.length} 个容器吗？`)) return;
+            
+            batchOperation(containers, 'start', '启动');
+        }
+
+        function batchStop() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            if (!confirm(`确定要停止选中的 ${containers.length} 个容器吗？`)) return;
+            
+            batchOperation(containers, 'stop', '停止');
+        }
+
+        function batchRestart() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            if (!confirm(`确定要重启选中的 ${containers.length} 个容器吗？`)) return;
+            
+            batchOperation(containers, 'restart', '重启');
+        }
+
+        function batchSuspend() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            if (!confirm(`确定要暂停选中的 ${containers.length} 个容器吗？`)) return;
+            
+            batchOperation(containers, 'suspend', '暂停');
+        }
+
+        function batchUnsuspend() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            if (!confirm(`确定要恢复选中的 ${containers.length} 个容器吗？`)) return;
+            
+            batchOperation(containers, 'unsuspend', '恢复');
+        }
+
+        function batchResetTraffic() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            if (!confirm(`确定要重置选中的 ${containers.length} 个容器的流量统计吗？`)) return;
+            
+            batchOperation(containers, 'traffic/reset', '重置流量');
+        }
+
+        function batchDelete() {
+            const containers = getSelectedContainers();
+            if (containers.length === 0) return;
+            
+            const confirmText = prompt(`⚠️ 此操作将永久删除选中的 ${containers.length} 个容器及其所有数据！\n\n请输入 "DELETE" 确认删除：`);
+            if (confirmText !== 'DELETE') {
+                if (confirmText !== null) showToast('error', '确认文本不匹配');
+                return;
+            }
+            
+            batchOperation(containers, 'delete', '删除', true);
+        }
+
+        function batchOperation(containers, action, actionName, isDelete = false) {
+            let successCount = 0;
+            let failCount = 0;
+            let total = containers.length;
+            
+            showToast('info', `开始批量${actionName}操作...`);
+            
+            // 使用Promise.all来并发执行所有请求
+            const promises = containers.map(hostname => {
+                return new Promise((resolve) => {
+                    $.ajax({
+                        url: `/api/containers/${hostname}/${action}?node_id=${nodeId}`,
+                        type: 'POST',
+                        success: function(result) {
+                            if (result.code === 200) {
+                                successCount++;
+                            } else {
+                                failCount++;
+                            }
+                            resolve();
+                        },
+                        error: function() {
+                            failCount++;
+                            resolve();
+                        }
+                    });
+                });
+            });
+            
+            Promise.all(promises).then(() => {
+                let message = `批量${actionName}完成：成功 ${successCount}，失败 ${failCount}`;
+                if (failCount > 0) {
+                    showToast('warning', message);
+                } else {
+                    showToast('success', message);
+                }
+                
+                // 清除选择
+                clearSelection();
+                
+                // 刷新列表
+                setTimeout(() => loadContainers(), 2000);
+            });
         }
     </script>
 

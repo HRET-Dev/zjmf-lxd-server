@@ -874,8 +874,8 @@
                 return;
             }
             $.ajax({
-                url: `/api/containers/${containerName}?node_id=${nodeId}`,
-                type: 'DELETE',
+                url: `/api/containers/${containerName}/delete?node_id=${nodeId}`,
+                type: 'POST',
                 success: function(result) {
                     if (result.code === 200) {
                         showToast('success', '容器删除成功');
