@@ -156,7 +156,7 @@ if [[ $INSTALL_MODE == "1" ]]; then
     ok "wget 已安装"
   fi
   
-  IMAGES_BASE_URL="https://github.com/xkatld/zjmf-lxd-server/releases/download/images"
+  IMAGES_BASE_URL="https://hubproxy.hret.dev/https://github.com/xkatld/zjmf-lxd-server/releases/download/images"
   
   declare -A DISTROS
   DISTROS=(
