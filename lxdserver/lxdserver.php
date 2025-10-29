@@ -136,170 +136,169 @@ function lxdserver_ConfigOptions()
 {
     return [
         'cpus' => [
-            'type' => 'text',
-            'name' => 'CPU核心数',
+            'type'        => 'text',
+            'name'        => 'CPU核心数',
             'description' => 'CPU核心数量',
-            'default' => '1',
-            'key' => 'cpus',
+            'default'     => '1',
+            'key'         => 'cpus',
         ],
         'memory' => [
-            'type' => 'text',
-            'name' => '内存',
+            'type'        => 'text',
+            'name'        => '内存',
             'description' => '内存大小[单位：MB GB]',
-            'default' => '256MB',
-            'key' => 'memory',
+            'default'     => '256MB',
+            'key'         => 'memory',
         ],
         'disk' => [
-            'type' => 'text',
-            'name' => '硬盘',
+            'type'        => 'text',
+            'name'        => '硬盘',
             'description' => '硬盘大小[单位：MB GB]',
-            'default' => '512MB',
-            'key' => 'disk',
+            'default'     => '512MB',
+            'key'         => 'disk',
         ],
         'image' => [
-            'type' => 'text',
-            'name' => '镜像',
+            'type'        => 'text',
+            'name'        => '镜像',
             'description' => '系统镜像',
-            'default' => 'debian12',
-            'key' => 'image',
+            'default'     => 'debian12',
+            'key'         => 'image',
         ],
         'traffic_limit' => [
-            'type' => 'text',
-            'name' => '月流量限制',
+            'type'        => 'text',
+            'name'        => '月流量限制',
             'description' => '单位：GB',
-            'default' => '100',
-            'key' => 'traffic_limit',
+            'default'     => '100',
+            'key'         => 'traffic_limit',
         ],
         'ingress' => [
-            'type' => 'text',
-            'name' => '入站带宽',
+            'type'        => 'text',
+            'name'        => '入站带宽',
             'description' => '下载速度限制[单位：Mbit Gbit]',
-            'default' => '100Mbit',
-            'key' => 'ingress',
+            'default'     => '100Mbit',
+            'key'         => 'ingress',
         ],
         'egress' => [
-            'type' => 'text',
-            'name' => '出站带宽',
+            'type'        => 'text',
+            'name'        => '出站带宽',
             'description' => '上传速度限制[单位：Mbit Gbit]',
-            'default' => '100Mbit',
-            'key' => 'egress',
+            'default'     => '100Mbit',
+            'key'         => 'egress',
         ],
         'nat_enabled' => [
-            'type' => 'dropdown',
-            'name' => 'NAT端口转发功能',
+            'type'        => 'dropdown',
+            'name'        => 'NAT端口转发功能',
             'description' => '端口映射开关',
-            'default' => 'true',
-            'key' => 'nat_enabled',
-            'options' => ['false' => '禁用', 'true' => '启用'],
+            'default'     => 'true',
+            'key'         => 'nat_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'nat_limit' => [
-            'type' => 'text',
-            'name' => 'NAT规则数量',
+            'type'        => 'text',
+            'name'        => 'NAT规则数量',
             'description' => '端口转发规则上限',
-            'default' => '5',
-            'key' => 'nat_limit',
+            'default'     => '5',
+            'key'         => 'nat_limit',
         ],
         'udp_enabled' => [
-            'type' => 'dropdown',
-            'name' => 'UDP协议支持',
+            'type'        => 'dropdown',
+            'name'        => 'UDP协议支持',
             'description' => '允许UDP端口转发',
-            'default' => 'false',
-            'key' => 'udp_enabled',
-            'options' => ['false' => '禁用', 'true' => '启用'],
+            'default'     => 'false',
+            'key'         => 'udp_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'cpu_allowance' => [
-            'type' => 'text',
-            'name' => 'CPU使用率限制',
+            'type'        => 'text',
+            'name'        => 'CPU使用率限制',
             'description' => 'CPU占用百分比[0%-100%]',
-            'default' => '50%',
-            'key' => 'cpu_allowance',
+            'default'     => '50%',
+            'key'         => 'cpu_allowance',
         ],
 
         'memory_swap' => [
-            'type' => 'dropdown',
-            'name' => 'Swap开关',
+            'type'        => 'dropdown',
+            'name'        => 'Swap开关',
             'description' => '虚拟内存开关',
-            'default' => 'true',
-            'key' => 'memory_swap',
-            'options' => ['true' => '启用', 'false' => '禁用'],
+            'default'     => 'true',
+            'key'         => 'memory_swap',
+            'options'     => ['true' => '启用', 'false' => '禁用'],
         ],
 
         'disk_io_limit' => [
-            'type' => 'text',
-            'name' => '磁盘IO限速',
+            'type'        => 'text',
+            'name'        => '磁盘IO限速',
             'description' => '读写速度限制[单位：MB]',
-            'default' => '100MB',
-            'key' => 'disk_io_limit',
+            'default'     => '100MB',
+            'key'         => 'disk_io_limit',
         ],
         'max_processes' => [
-            'type' => 'text',
-            'name' => '最大进程数',
+            'type'        => 'text',
+            'name'        => '最大进程数',
             'description' => '进程数量上限',
-            'default' => '512',
-            'key' => 'max_processes',
+            'default'     => '512',
+            'key'         => 'max_processes',
         ],
 
         'ipv6_enabled' => [
-            'type' => 'dropdown',
-            'name' => '独立IPv6功能',
+            'type'        => 'dropdown',
+            'name'        => '独立IPv6功能',
             'description' => '独立IPv6开关',
-            'default' => 'false',
-            'key' => 'ipv6_enabled',
-            'options' => ['false' => '禁用', 'true' => '启用'],
+            'default'     => 'false',
+            'key'         => 'ipv6_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'ipv6_limit' => [
-            'type' => 'text',
-            'name' => 'IPv6绑定数量',
+            'type'        => 'text',
+            'name'        => 'IPv6绑定数量',
             'description' => 'IPv6地址数量上限',
-            'default' => '1',
-            'key' => 'ipv6_limit',
+            'default'     => '1',
+            'key'         => 'ipv6_limit',
         ],
         'proxy_enabled' => [
-            'type' => 'dropdown',
-            'name' => 'Nginx反向代理功能',
+            'type'        => 'dropdown',
+            'name'        => 'Nginx反向代理功能',
             'description' => '反向代理开关',
-            'default' => 'false',
-            'key' => 'proxy_enabled',
-            'options' => ['false' => '禁用', 'true' => '启用'],
+            'default'     => 'false',
+            'key'         => 'proxy_enabled',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
         'proxy_limit' => [
-            'type' => 'text',
-            'name' => '反向代理域名数量',
+            'type'        => 'text',
+            'name'        => '反向代理域名数量',
             'description' => '域名绑定数量上限',
-            'default' => '1',
-            'key' => 'proxy_limit',
+            'default'     => '1',
+            'key'         => 'proxy_limit',
         ],
         'allow_nesting' => [
-            'type' => 'dropdown',
-            'name' => '嵌套虚拟化',
+            'type'        => 'dropdown',
+            'name'        => '嵌套虚拟化',
             'description' => '支持Docker等虚拟化',
-            'default' => 'true',
-            'key' => 'allow_nesting',
-            'options' => ['true' => '启用', 'false' => '禁用'],
+            'default'     => 'true',
+            'key'         => 'allow_nesting',
+            'options'     => ['true' => '启用', 'false' => '禁用'],
         ],
         'privileged' => [
-            'type' => 'dropdown',
-            'name' => '特权模式',
+            'type'        => 'dropdown',
+            'name'        => '特权模式',
             'description' => '特权容器开关',
-            'default' => 'false',
-            'key' => 'privileged',
-            'options' => ['false' => '禁用', 'true' => '启用'],
+            'default'     => 'false',
+            'key'         => 'privileged',
+            'options'     => ['false' => '禁用', 'true' => '启用'],
         ],
-
+        'enable_lxcfs' => [
+            'type'        => 'dropdown',
+            'name'        => 'LXCFS资源视图',
+            'description' => '显示真实资源限制',
+            'default'     => 'true',
+            'key'         => 'enable_lxcfs',
+            'options'     => ['true' => '启用', 'false' => '禁用'],
+        ],
         'external_port_range' => [
             'type' => 'text',
             'name' => '外网端口范围',
             'description' => '格式：起始-结束；留空或非法将使用默认10000-65535',
             'default' => '10000-65535',
             'key' => 'external_port_range',
-        ],
-        'enable_lxcfs' => [
-            'type' => 'dropdown',
-            'name' => 'LXCFS资源视图',
-            'description' => '显示真实资源限制',
-            'default' => 'true',
-            'key' => 'enable_lxcfs',
-            'options' => ['true' => '启用', 'false' => '禁用'],
         ],
     ];
 }
@@ -1576,12 +1575,8 @@ function lxdserver_proxyadd($params)
     $domain = trim($post['domain'] ?? '');
     $container_port = intval($post['container_port'] ?? 80);
     $description = trim($post['description'] ?? '');
-    $sslFlag = strtolower((string)($post['ssl_enabled'] ?? 'false'));
-    $ssl_enabled = in_array($sslFlag, ['true', '1', 'on', 'yes'], true);
+    $ssl_enabled = ($post['ssl_enabled'] ?? 'false') === 'true';
     $ssl_type = trim($post['ssl_type'] ?? 'self-signed');
-    if ($ssl_type === '') {
-        $ssl_type = 'self-signed';
-    }
     $ssl_cert = trim($post['ssl_cert'] ?? '');
     $ssl_key = trim($post['ssl_key'] ?? '');
 
@@ -1602,29 +1597,22 @@ function lxdserver_proxyadd($params)
         return ['status' => 'error', 'msg' => "已达到反向代理数量上限（{$proxy_limit}个），无法继续添加"];
     }
 
-    if ($container_port <= 0 || $container_port > 65535) {
-        return ['status' => 'error', 'msg' => '容器内部端口范围为1-65535'];
-    }
-
-    $allowedSslTypes = ['self-signed', 'letsencrypt', 'custom'];
-    if (!in_array($ssl_type, $allowedSslTypes, true)) {
-        $ssl_type = 'self-signed';
-    }
-
-    if ($ssl_enabled && $ssl_type === 'custom' && ($ssl_cert === '' || $ssl_key === '')) {
+    // 如果启用SSL且类型是custom，检查证书和私钥
+    if ($ssl_enabled && $ssl_type === 'custom' && (empty($ssl_cert) || empty($ssl_key))) {
         return ['status' => 'error', 'msg' => '启用自定义SSL证书时，必须提供证书和私钥内容'];
     }
 
-    $requestData = 'hostname=' . urlencode($params['domain']) .
-        '&domain=' . urlencode($domain) .
-        '&container_port=' . $container_port .
-        '&description=' . urlencode($description) .
-        '&ssl_enabled=' . ($ssl_enabled ? 'true' : 'false') .
-        '&ssl_type=' . urlencode($ssl_type);
-
+    $requestData = 'hostname=' . urlencode($params['domain']) . 
+                   '&domain=' . urlencode($domain) . 
+                   '&container_port=' . $container_port .
+                   '&description=' . urlencode($description) .
+                   '&ssl_enabled=' . ($ssl_enabled ? 'true' : 'false') .
+                   '&ssl_type=' . urlencode($ssl_type);
+    
+    // 如果是自定义证书，添加证书内容
     if ($ssl_enabled && $ssl_type === 'custom') {
         $requestData .= '&ssl_cert=' . urlencode($ssl_cert) .
-            '&ssl_key=' . urlencode($ssl_key);
+                       '&ssl_key=' . urlencode($ssl_key);
     }
 
     $data = [
