@@ -125,8 +125,8 @@ function lxdserver_pick_available_port($params, $hostname, $protocol = 'tcp', $m
 function lxdserver_MetaData()
 {
     return [
-        'DisplayName' => '魔方财务-LXD对接插件 by HRET',
-        'APIVersion' => '1.0.2',
+        'DisplayName' => '魔方财务-LXD对接插件 by HRET-Dev',
+        'APIVersion' => '1.0.3',
         'HelpDoc' => 'https://github.com/HRET-Dev/zjmf-lxd-server',
     ];
 }
@@ -138,56 +138,56 @@ function lxdserver_ConfigOptions()
         'cpus' => [
             'type' => 'text',
             'name' => 'CPU核心数',
-            'description' => '容器的CPU核心数量',
+            'description' => 'CPU核心数量',
             'default' => '1',
             'key' => 'cpus',
         ],
         'memory' => [
             'type' => 'text',
             'name' => '内存',
-            'description' => '容器的内存大小',
+            'description' => '内存大小[单位：MB GB]',
             'default' => '256MB',
             'key' => 'memory',
         ],
         'disk' => [
             'type' => 'text',
             'name' => '硬盘',
-            'description' => '容器的硬盘大小',
+            'description' => '硬盘大小[单位：MB GB]',
             'default' => '512MB',
             'key' => 'disk',
         ],
         'image' => [
             'type' => 'text',
             'name' => '镜像',
-            'description' => '容器镜像名称',
+            'description' => '系统镜像',
             'default' => 'debian12',
             'key' => 'image',
         ],
         'traffic_limit' => [
             'type' => 'text',
             'name' => '月流量限制',
-            'description' => '每月流量限制',
+            'description' => '单位：GB',
             'default' => '100',
             'key' => 'traffic_limit',
         ],
         'ingress' => [
             'type' => 'text',
             'name' => '入站带宽',
-            'description' => '容器的入站带宽限制',
+            'description' => '下载速度限制[单位：Mbit Gbit]',
             'default' => '100Mbit',
             'key' => 'ingress',
         ],
         'egress' => [
             'type' => 'text',
             'name' => '出站带宽',
-            'description' => '容器的出站带宽限制',
+            'description' => '上传速度限制[单位：Mbit Gbit]',
             'default' => '100Mbit',
             'key' => 'egress',
         ],
         'nat_enabled' => [
             'type' => 'dropdown',
             'name' => 'NAT端口转发功能',
-            'description' => '是否启用NAT端口转发功能',
+            'description' => '端口映射开关',
             'default' => 'true',
             'key' => 'nat_enabled',
             'options' => ['false' => '禁用', 'true' => '启用'],
@@ -195,14 +195,14 @@ function lxdserver_ConfigOptions()
         'nat_limit' => [
             'type' => 'text',
             'name' => 'NAT规则数量',
-            'description' => 'NAT端口转发规则的数量限制',
+            'description' => '端口转发规则上限',
             'default' => '5',
             'key' => 'nat_limit',
         ],
         'udp_enabled' => [
             'type' => 'dropdown',
             'name' => 'UDP协议支持',
-            'description' => '是否允许创建UDP端口转发规则',
+            'description' => '允许UDP端口转发',
             'default' => 'false',
             'key' => 'udp_enabled',
             'options' => ['false' => '禁用', 'true' => '启用'],
@@ -210,7 +210,7 @@ function lxdserver_ConfigOptions()
         'cpu_allowance' => [
             'type' => 'text',
             'name' => 'CPU使用率限制',
-            'description' => 'CPU使用率百分比',
+            'description' => 'CPU占用百分比[0%-100%]',
             'default' => '50%',
             'key' => 'cpu_allowance',
         ],
@@ -218,7 +218,7 @@ function lxdserver_ConfigOptions()
         'memory_swap' => [
             'type' => 'dropdown',
             'name' => 'Swap开关',
-            'description' => '是否允许使用Swap',
+            'description' => '虚拟内存开关',
             'default' => 'true',
             'key' => 'memory_swap',
             'options' => ['true' => '启用', 'false' => '禁用'],
@@ -227,14 +227,14 @@ function lxdserver_ConfigOptions()
         'disk_io_limit' => [
             'type' => 'text',
             'name' => '磁盘IO限速',
-            'description' => '磁盘读写速度限制',
+            'description' => '读写速度限制[单位：MB]',
             'default' => '100MB',
             'key' => 'disk_io_limit',
         ],
         'max_processes' => [
             'type' => 'text',
             'name' => '最大进程数',
-            'description' => '限制容器最大进程数',
+            'description' => '进程数量上限',
             'default' => '512',
             'key' => 'max_processes',
         ],
@@ -242,7 +242,7 @@ function lxdserver_ConfigOptions()
         'ipv6_enabled' => [
             'type' => 'dropdown',
             'name' => '独立IPv6功能',
-            'description' => '是否启用独立IPv6功能',
+            'description' => '独立IPv6开关',
             'default' => 'false',
             'key' => 'ipv6_enabled',
             'options' => ['false' => '禁用', 'true' => '启用'],
@@ -250,14 +250,14 @@ function lxdserver_ConfigOptions()
         'ipv6_limit' => [
             'type' => 'text',
             'name' => 'IPv6绑定数量',
-            'description' => 'IPv6独立地址数量限制',
+            'description' => 'IPv6地址数量上限',
             'default' => '1',
             'key' => 'ipv6_limit',
         ],
         'proxy_enabled' => [
             'type' => 'dropdown',
             'name' => 'Nginx反向代理功能',
-            'description' => '是否启用Nginx反向代理功能',
+            'description' => '反向代理开关',
             'default' => 'false',
             'key' => 'proxy_enabled',
             'options' => ['false' => '禁用', 'true' => '启用'],
@@ -265,14 +265,14 @@ function lxdserver_ConfigOptions()
         'proxy_limit' => [
             'type' => 'text',
             'name' => '反向代理域名数量',
-            'description' => '允许绑定的域名数量限制',
+            'description' => '域名绑定数量上限',
             'default' => '1',
             'key' => 'proxy_limit',
         ],
         'allow_nesting' => [
             'type' => 'dropdown',
             'name' => '嵌套虚拟化',
-            'description' => '是否允许容器内运行虚拟化',
+            'description' => '支持Docker等虚拟化',
             'default' => 'true',
             'key' => 'allow_nesting',
             'options' => ['true' => '启用', 'false' => '禁用'],
@@ -280,7 +280,7 @@ function lxdserver_ConfigOptions()
         'privileged' => [
             'type' => 'dropdown',
             'name' => '特权模式',
-            'description' => '是否允许特权容器运行',
+            'description' => '特权容器开关',
             'default' => 'false',
             'key' => 'privileged',
             'options' => ['false' => '禁用', 'true' => '启用'],
@@ -296,7 +296,7 @@ function lxdserver_ConfigOptions()
         'enable_lxcfs' => [
             'type' => 'dropdown',
             'name' => 'LXCFS资源视图',
-            'description' => '启用后容器内将显示真实的资源限制（推荐启用，提升应用兼容性）',
+            'description' => '显示真实资源限制',
             'default' => 'true',
             'key' => 'enable_lxcfs',
             'options' => ['true' => '启用', 'false' => '禁用'],
@@ -1302,10 +1302,29 @@ function lxdserver_natlist($params)
 
 function lxdserver_natcheck($params)
 {
-    // 允许从 GET 或 POST 获取参数
-    $dport = intval($_GET['dport'] ?? ($_POST['dport'] ?? 0));
-    $dtype = strtolower(trim($_GET['dtype'] ?? ($_POST['dtype'] ?? 'tcp')));
-    $hostname = trim($_GET['hostname'] ?? ($_POST['hostname'] ?? ''));
+    $rawInput = file_get_contents("php://input");
+    $inputData = [];
+    if ($rawInput !== false && $rawInput !== '') {
+        parse_str($rawInput, $inputData);
+    }
+
+    $dport = intval($_GET['dport'] ?? $_POST['dport'] ?? $inputData['dport'] ?? 0);
+    $dtype = strtolower(trim($_GET['dtype'] ?? $_POST['dtype'] ?? $inputData['dtype'] ?? 'tcp'));
+    $hostname = trim($_GET['hostname'] ?? $_POST['hostname'] ?? $inputData['hostname'] ?? '');
+
+    if ($hostname === '' && !empty($params['domain'])) {
+        $hostname = trim($params['domain']);
+    }
+
+    lxdserver_debug('natcheck参数解析', [
+        'dport' => $dport,
+        'dtype' => $dtype,
+        'hostname' => $hostname,
+        'GET' => $_GET,
+        'POST' => $_POST,
+        'raw_input' => $rawInput,
+        'params_domain' => $params['domain'] ?? 'null'
+    ]);
 
     if ($dport <= 0) {
         return ['code' => 400, 'msg' => '缺少端口参数', 'data' => ['available' => false, 'reason' => '缺少端口参数']];
@@ -1545,11 +1564,26 @@ function lxdserver_proxyadd($params)
         return ['status' => 'error', 'msg' => 'Nginx反向代理功能已禁用，请联系管理员启用此功能。'];
     }
 
-    parse_str(file_get_contents("php://input"), $post);
+    $rawInput = file_get_contents("php://input");
+    $post = [];
+    if ($rawInput !== false && $rawInput !== '') {
+        parse_str($rawInput, $post);
+    }
+    if (!empty($_POST)) {
+        $post = array_merge($post, $_POST);
+    }
 
     $domain = trim($post['domain'] ?? '');
     $container_port = intval($post['container_port'] ?? 80);
     $description = trim($post['description'] ?? '');
+    $sslFlag = strtolower((string)($post['ssl_enabled'] ?? 'false'));
+    $ssl_enabled = in_array($sslFlag, ['true', '1', 'on', 'yes'], true);
+    $ssl_type = trim($post['ssl_type'] ?? 'self-signed');
+    if ($ssl_type === '') {
+        $ssl_type = 'self-signed';
+    }
+    $ssl_cert = trim($post['ssl_cert'] ?? '');
+    $ssl_key = trim($post['ssl_key'] ?? '');
 
     if (empty($domain)) {
         return ['status' => 'error', 'msg' => '请输入域名'];
@@ -1568,10 +1602,30 @@ function lxdserver_proxyadd($params)
         return ['status' => 'error', 'msg' => "已达到反向代理数量上限（{$proxy_limit}个），无法继续添加"];
     }
 
+    if ($container_port <= 0 || $container_port > 65535) {
+        return ['status' => 'error', 'msg' => '容器内部端口范围为1-65535'];
+    }
+
+    $allowedSslTypes = ['self-signed', 'letsencrypt', 'custom'];
+    if (!in_array($ssl_type, $allowedSslTypes, true)) {
+        $ssl_type = 'self-signed';
+    }
+
+    if ($ssl_enabled && $ssl_type === 'custom' && ($ssl_cert === '' || $ssl_key === '')) {
+        return ['status' => 'error', 'msg' => '启用自定义SSL证书时，必须提供证书和私钥内容'];
+    }
+
     $requestData = 'hostname=' . urlencode($params['domain']) .
         '&domain=' . urlencode($domain) .
         '&container_port=' . $container_port .
-        '&description=' . urlencode($description);
+        '&description=' . urlencode($description) .
+        '&ssl_enabled=' . ($ssl_enabled ? 'true' : 'false') .
+        '&ssl_type=' . urlencode($ssl_type);
+
+    if ($ssl_enabled && $ssl_type === 'custom') {
+        $requestData .= '&ssl_cert=' . urlencode($ssl_cert) .
+            '&ssl_key=' . urlencode($ssl_key);
+    }
 
     $data = [
         'url' => '/api/proxy/add',
@@ -1637,9 +1691,16 @@ function lxdserver_proxylist($params)
 // 检查域名是否可用
 function lxdserver_proxycheck($params)
 {
-    parse_str(file_get_contents("php://input"), $post);
+    $rawInput = file_get_contents("php://input");
+    $post = [];
+    if ($rawInput !== false && $rawInput !== '') {
+        parse_str($rawInput, $post);
+    }
+    if (!empty($_POST)) {
+        $post = array_merge($post, $_POST);
+    }
 
-    $domain = trim($post['domain'] ?? '');
+    $domain = trim($_GET['domain'] ?? ($post['domain'] ?? ''));
 
     if (empty($domain)) {
         return ['status' => 'error', 'msg' => '请输入域名'];
