@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    {{template "admin_header.html" .}}
+    
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800 flex items-center gap-3">
+                    <span class="iconify text-blue-600" data-icon="mdi:ip" data-width="36"></span>
+                    IPv4
+                </h1>
+                <p class="text-gray-600 mt-1">IPv4 地址绑定管理</p>
+            </div>
+            <button onclick="window.location.reload()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition">
+                刷新
+            </button>
+        </div>
+
+        <div class="bg-white rounded-lg border border-gray-200" id="ipv4Table">
+            <div class="p-8 text-center text-gray-500">
+                <span class="iconify animate-pulse" data-icon="mdi:loading" data-width="24"></span>
+                <p>加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    {{template "admin_footer.html" .}}
+
+    <script>
+        $(document).ready(function() {
+            loadIPv4();
+        });
+
+        async function loadIPv4() {
+            try {
+                const response = await fetch('/api/cache/ipv4', {
+                    headers: {
+                        'apikey': '{{ .api_key }}'
+                    }
+                });
+                const result = await response.json();
+                if (result.code === 200 && result.data) {
+                    renderIPv4(result.data);
+                } else {
+                    $('#ipv4Table').html('<div class="p-8 text-center text-gray-500">暂无IPv4绑定</div>');
+                }
+            } catch (error) {
+                console.error('加载失败:', error);
+                $('#ipv4Table').html('<div class="p-8 text-center text-red-500">加载失败</div>');
+            }
+        }
+
+        function renderIPv4(bindings) {
+            if (!bindings || bindings.length === 0) {
+                $('#ipv4Table').html('<div class="p-8 text-center text-gray-500">暂无IPv4绑定</div>');
+                return;
+            }
+
+            let html = '<table class="w-full"><thead class="bg-gray-50 border-b"><tr>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">容器</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">公网IPv4</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">容器IPv4</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">接口</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">网关</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>';
+            html += '</tr></thead><tbody class="divide-y divide-gray-200">';
+
+            bindings.forEach(binding => {
+                // 状态标签
+                const statusBadge = binding.status === 'active' || binding.status === 'Active'
+                    ? '<span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded">活跃</span>'
+                    : '<span class="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded">未知</span>';
+
+                html += `<tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">${binding.container_name || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500"><code class="text-xs font-mono text-blue-600">${binding.public_ipv4 || '-'}</code></td>
+                    <td class="px-6 py-4 text-sm text-gray-500"><code class="text-xs font-mono">${binding.container_ipv4 || '-'}</code></td>
+                    <td class="px-6 py-4"><span class="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded">${binding.interface || '-'}</span></td>
+                    <td class="px-6 py-4 text-sm text-gray-500"><code class="text-xs font-mono">${binding.gateway || '-'}</code></td>
+                    <td class="px-6 py-4">${statusBadge}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${binding.created_at ? new Date(binding.created_at).toLocaleString('zh-CN') : '-'}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            $('#ipv4Table').html(html);
+        }
+    </script>
+</body>
+</html>
+

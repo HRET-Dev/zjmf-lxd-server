@@ -4,6 +4,9 @@
 
 **详细的安装和使用文档，请参考 [项目 Wiki](https://github.com/xkatld/zjmf-lxd-server/wiki)。**
 
+交流群：
+<img width="150" height="265" alt="image" src="https://github.com/user-attachments/assets/a9e6e62c-7cb7-4a27-903a-89a1406e9da4" />
+
 ## 项目特色
 
 - 高性能Go后端服务 - 完整的容器管理功能 - IPv6独立绑定支持 - NAT端口转发（IPv4/IPv6双栈） - 流量监控与统计 - Web VNC控制台 - 安全的API认证 - 与魔方财务系统无缝集成
@@ -14,17 +17,29 @@
 
 ## 项目截图
 
-info页面
-<img width="1637" height="810" alt="image" src="https://github.com/user-attachments/assets/5001f198-57bd-44b0-8698-fe9d92a2a662" />
+info页面：
 
-nat页面
-<img width="1150" height="534" alt="image" src="https://github.com/user-attachments/assets/4ba28cc5-1d3d-45a8-9e1b-9ecb28294389" /><img width="518" height="593" alt="image" src="https://github.com/user-attachments/assets/9cc5e287-e275-4f6a-8813-e5d056c61f38" />
+<img width="820" height="401" alt="image" src="https://github.com/user-attachments/assets/ccb07579-b2a1-42d2-9bab-4d6eaf94f376" />
 
-ipv6页面
-<img width="1162" height="514" alt="image" src="https://github.com/user-attachments/assets/a8caea46-b6d3-4a05-8d7e-33d465d910a5" /><img width="534" height="428" alt="image" src="https://github.com/user-attachments/assets/3972edcd-b8ac-435a-adac-c215aaa5494d" />
+nat页面：
 
-vnc页面
-<img width="1920" height="911" alt="image" src="https://github.com/user-attachments/assets/6093a9f8-ce35-4968-a028-8673519c0ba9" />
+<img width="270" height="371" alt="image" src="https://github.com/user-attachments/assets/bcae31ac-ea98-4258-9e2d-e6e10bf99fd7" />
+<img width="815" height="417" alt="image" src="https://github.com/user-attachments/assets/2e9f44b9-6966-4566-ac4d-6086165637bd" />
 
-商品配置页面
-<img width="1183" height="616" alt="image" src="https://github.com/user-attachments/assets/6f0ba5ff-cf36-4eb0-a593-3f767a8d6d56" />
+ipv6/ipv4页面：
+
+<img width="581" height="257" alt="image" src="https://github.com/user-attachments/assets/a8caea46-b6d3-4a05-8d7e-33d465d910a5" />
+<img width="267" height="214" alt="image" src="https://github.com/user-attachments/assets/3972edcd-b8ac-435a-adac-c215aaa5494d" />
+
+代理页面：
+
+<img width="263" height="411" alt="image" src="https://github.com/user-attachments/assets/9693ef55-b0c6-43ae-bbd3-2071134532b1" />
+
+vnc页面：
+
+<img width="960" height="456" alt="image" src="https://github.com/user-attachments/assets/6093a9f8-ce35-4968-a028-8673519c0ba9" />
+
+商品配置页面：
+
+<img width="618" height="318" alt="image" src="https://github.com/user-attachments/assets/66f21481-30e4-45f3-9234-90c37bbac9bf" />
+
